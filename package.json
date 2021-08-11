@@ -9,7 +9,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "bluebird": "^3.5.1",
-    "node-cmd": "^3.0.0"
+    "node-cmd": "^5.0.0"
   }
 }

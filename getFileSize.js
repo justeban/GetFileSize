@@ -1,40 +1,47 @@
 'use strict';
 
 const cmd = require('node-cmd');
-const Promise = require('bluebird');
 
-const runCommandAsync = Promise.promisify(cmd.get, { multiArgs: true, context: cmd });
+const runCommandAsync = command => new Promise((res, rej) => {
+  cmd.run(command, (err, data) => {
+    if (err) { rej(err); }
+    return res(data)
+  })
+});
 
 const directory = process.argv[2] ? process.argv[2] : './';
 const flag = process.argv[3] ? process.argv[3] : '';
 
 if (!directory) { throw new Error('No Directory Given'); }
 
-let runCommand = async (command) => {
+const runCommand = async (command) => {
   try {
-    return await runCommandAsync(command);
+    return runCommandAsync(command);
   } catch (err) {
-    command = `sudo ${command}`;
-    return await runCommandAsync(command);
+    // try again with sudo
+    const withSudo = `sudo ${command}`;
+    return runCommandAsync(withSudo);
   }
 }
 
-let retrieveFileSizes = async () => {
+const retrieveListOfFiles = () => {
   let command = `ls -a ${directory}`;
-  let data;
   try {
-    data = await runCommand(command);
+    return runCommand(command);
   } catch (err) {
     return err;
   }
-  let filteredDir = data[0].split('\n').filter((file) => file !== '' && file !== '.' && file !== '..');
+}
+
+const retrieveFileSizes = async () => {
+  const listOfFiles = await retrieveListOfFiles();
+  const filteredDir = listOfFiles.split('\n').filter((file) => file !== '' && file !== '.' && file !== '..');
   const files = filteredDir.map(async file => {
-    let newFile = file.replace(/ /gm, '\\ ');
-    let command = `du -sh ${newFile}`;
-    let dirData;
+    const newFile = file.replace(/ /gm, '\\ ');
+    const diskUsage = `du -sh ${newFile}`;
     try {
-      dirData = await runCommand(command);
-      return dirData[0].replace(/\\n/gm, ' ').split('\t');
+      const dirData = await runCommand(diskUsage);
+      return dirData.replace(/\\n/gm, ' ').split('\t');
     } catch (e) {
       return;
     }
@@ -42,25 +49,25 @@ let retrieveFileSizes = async () => {
   return Promise.all(files);
 };
 
-let getGByteFiles = (files) => {
+const getGByteFiles = (files) => {
   return files.filter(file => {
     const [size] = file;
     return size.includes('G')
   })
 };
 
-let getSize = (fileInfo) => {
+const getSize = (fileInfo) => {
   const [sizeAsString] = fileInfo;
   return parseFloat(sizeAsString.split(/w/)[0]);
 };
 
-let getSuffix = (fileInfo) => {
+const getSuffix = (fileInfo) => {
   var regex = /[A-Z]/g
   const [sizeAsString] = fileInfo;
   return sizeAsString.match(regex)[0];
 }
 
-let convertSize = (preConversionSize, suffix) => {
+const convertSize = (preConversionSize, suffix) => {
   switch (suffix) {
     case 'B':
       return preConversionSize;
@@ -73,7 +80,7 @@ let convertSize = (preConversionSize, suffix) => {
   }
 }
 
-let compareNumbers = (a, b) => {
+const compareNumbers = (a, b) => {
   const aSize = getSize(a);
   const bSize = getSize(b);
   const aSuffix = getSuffix(a);
@@ -83,16 +90,24 @@ let compareNumbers = (a, b) => {
   return bNormalizedSize - aNormalizedSize;
 };
 
-retrieveFileSizes()
-  .then(files => {
-    const filteredFiles = files.filter(Boolean);
+const displayDataTable = (fileData) => {
+  const tableData = fileData.map(file => ({ size: file[0], name: file[1] }));
+  console.table(tableData, ['size', 'name']);
+}
+
+(async () => {
+  try {
+    const files = await retrieveFileSizes();
+    const filteredFiles = files.filter(file => file && file[0] && file[1]);
     const sortedFiles = filteredFiles.sort(compareNumbers);
+  
     if (flag === '-g') { 
-      console.log(getGByteFiles(sortedFiles));
+      displayDataTable(getGByteFiles(sortedFiles));
       return;
     } else {
-      console.log(sortedFiles);
+      displayDataTable(sortedFiles);
     }
-  })
-  .catch(err => console.log(err));
-
+  } catch (err) {
+    console.error(err);
+  }
+})()
