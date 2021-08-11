@@ -1,0 +1,15 @@
+{
+  "name": "getfilesize",
+  "version": "1.0.0",
+  "description": "",
+  "main": "getFileSize.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bluebird": "^3.5.1",
+    "node-cmd": "^3.0.0"
+  }
+}
